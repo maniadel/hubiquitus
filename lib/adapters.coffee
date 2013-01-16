@@ -146,6 +146,44 @@ class ChannelInboundAdapter extends InboundAdapter
         @sock.close()
       super
 
+
+#------------ HTTP INBox Adapter -------------
+
+class HttpInboundAdapter extends InboundAdapter
+  constructor: (properties) ->
+    super
+
+    if properties.url_path then @serverPath = properties.url_path   else @urlpath = "tcp://127.0.0.1"
+    if properties.port     then @port = properties.port             else @port = 8080
+
+    @qs = require 'querystring'
+    @sys = require 'sys'
+    @url = require 'url'
+    @http = require 'http'
+
+
+  start: ->
+    console.log "Server path : #{@serverPath} Port : #{@port} is  running ..."
+    server = @http.createServer (req, res) =>
+      res.writeHead 200, 'ontent-Type' : 'text/plain'
+      res.end "Runnig Server path : #{@serverPath} Port : #{@port} is  running ..."
+
+      if req.method is 'POST'
+        body = ""
+        req.on "data", (data) ->  body += data
+        req.on "end", ->
+          POST =  @qs.parse(body)
+          @owner.emit "message", @owner.buildMessage(@owner.actor, "hHttpData", POST, {headers:req.headers})
+
+      else if req.method is 'GET'
+        req.on 'end', -> res.writeHead 200, 'ontent-Type' : 'text/plain'
+        res.end()
+        url_parts =  req.url
+        @owner.emit "message", @owner.buildMessage(@owner.actor, "hHttpData", url_parts, {headers:req.headers})
+
+    server.listen @port,@serverPath
+
+
 class OutboundAdapter extends Adapter
 
   constructor: (properties) ->
@@ -196,6 +234,56 @@ class ChildprocessOutboundAdapter extends OutboundAdapter
   send: (message) ->
     @start() unless @started
     @ref.send message
+
+
+#----------- HTTP OUt BOX
+
+class HttpOutboundAdapter extends OutboundAdapter
+  constructor: (properties) ->
+    super
+
+    if properties.url             then @url  = properties.url                       else @url = "tcp://127.0.0.1"
+    if properties.port            then @port = properties.port                      else @port = 8080
+    if properties.path            then @path = properties.path                      else @path = "/"
+    if properties.targetActorAid  then @targetActorAid = properties.targetActorAid
+
+    console.log "HttpOutboundAdapter used -> [ url:  "+@url+"  port :"+@port+" path: "+@path+" targetActorAid: "+@targetActorAid+"]"
+
+  send: (message) ->
+    @start() unless @started
+    console.log message
+
+    @querystring = require 'querystring'
+    @url = require 'url'
+    @http = require 'http'
+
+    # Setting the configuration
+    post_options =
+      host: @url
+      port: @port
+      path: @path
+      method: "POST"
+      headers:
+        "Content-Type": "application/x-www-form-urlencoded"
+        "Content-Length": message.payload.length
+
+    post_req = @http.request(post_options, (res) ->
+      res.setEncoding "utf8"
+      res.on "data", (chunk) ->
+        console.log "Response: " + chunk
+
+      @status = res.statusCode
+      console.log "response  :"+@status+"  ", res.headers
+    )
+
+    post_req.on "error", (e) ->
+      console.log "problem with request: " + e.message
+
+    # write parameters to post body
+    post_req.write message.payload
+    post_req.end()
+
+
 
 class SocketOutboundAdapter extends OutboundAdapter
 
@@ -320,6 +408,10 @@ exports.adapter = (type, properties) ->
       new ChannelOutboundAdapter(properties)
     when "socketIO"
       new SocketIOAdapter(properties)
+    when "http_in"
+      new HttpInboundAdapter(properties)
+    when "http_out"
+      new HttpOutboundAdapter(properties)
     else
       throw new Error "Incorrect type '#{type}'"
 

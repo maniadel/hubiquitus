@@ -21,13 +21,16 @@
             }
         },
         {
-            "actor": "urn:localhost:dispatcher",
-            "type": "hdispatcher",
+            "actor": "urn:localhost:hellohttp",
+            "type": "../../../hellohttp",
             "method": "inproc",
+            "children": [
+
+            ],
+            "adapters": [{ "type": "http_in", "url_path": "127.0.0.1", "port": 8888 },{ "type": "http_out", "url": "http://178.32.209.229","targetActorAid" :"http_out_box" ,"path": "/" ,"port": 8889 }],
             "properties": {
-                "workers": { "method": "fork", "type": "hactor", "nb": 2 }
-            },
-            "adapters": [ { "type": "socket_in", "url": "tcp://127.0.0.1:2992" } ]
+
+            }
         },
         {
             "actor": "urn:localhost:channel",
